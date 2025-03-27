@@ -85,9 +85,8 @@ jobs:
           path: build/WebGL
           if-no-files-found: warn
       
-      # Netlify にデプロイ
       - name: Deploy to Netlify
-        uses: nwtgck/actions-netlify@v2
+        uses: nwtgck/actions-netlify@v3.0.0
         with:
           publish-dir: './build/WebGL'
           production-branch: main
