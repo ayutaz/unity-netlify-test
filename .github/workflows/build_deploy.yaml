@@ -53,9 +53,22 @@ jobs:
           buildsPath: build
           unityVersion: ${{ env.UNITY_VERSION }}
 
+      # ビルド結果のディレクトリを確認
+      - name: Check build directory
+        run: |
+          ls -la build || echo "build directory does not exist"
+          ls -la build/WebGL || echo "build/WebGL directory does not exist"
+
+      # ビルド結果の権限を変更
+      - name: Fix permissions
+        run: |
+          sudo chown -R $USER:$USER build || echo "Failed to change ownership of build directory"
+          sudo chmod -R 755 build || echo "Failed to change permissions of build directory"
+
       # CORS 設定ファイルを追加
       - name: Create Netlify configuration
         run: |
+          mkdir -p build/WebGL || echo "Failed to create WebGL directory"
           cat > build/WebGL/netlify.toml << 'EOL'
           [[headers]]
             for = "/*"
@@ -70,6 +83,7 @@ jobs:
         with:
           name: WebGL-Build
           path: build/WebGL
+          if-no-files-found: warn
       
       # Netlify にデプロイ
       - name: Deploy to Netlify
