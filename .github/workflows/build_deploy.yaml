@@ -53,28 +53,24 @@ jobs:
           buildsPath: build
           unityVersion: ${{ env.UNITY_VERSION }}
 
-      # ビルドディレクトリの内容確認と権限修正
-      - name: Check build directory and fix permissions
+      # ビルドディレクトリ構造を確認
+      - name: Check build directory structure
         run: |
-          ls -la build || echo "build directory does not exist"
-          ls -la build/WebGL || echo "build/WebGL directory does not exist"
+          echo "=== ビルドディレクトリ構造 ==="
+          find build -type d | sort
+          echo "=== WebGL ビルドファイル ==="
+          find build -name "*.br" -o -name "*.js" | sort
           
-          # 権限を修正
-          sudo chown -R $(whoami):$(whoami) build || echo "Failed to change ownership"
-          sudo chmod -R 755 build || echo "Failed to change permissions"
-          
-          if [ -d "build/WebGL/WebGL" ]; then
-            echo "WebGL build is in build/WebGL/WebGL directory"
-            ls -la build/WebGL/WebGL
-            ls -la build/WebGL/WebGL/Build || echo "Build directory does not exist"
-          fi
+          # 権限を変更
+          sudo chown -R $(whoami):$(whoami) build
+          sudo chmod -R 755 build
 
-      # 一時ディレクトリに Netlify 設定ファイルを作成し、コピー
-      - name: Create Netlify configuration in temp dir
+      # ディレクトリ構造を修正（必要に応じて）
+      - name: Setup Netlify configuration
         run: |
-          # 一時ディレクトリに設定ファイルを作成
-          mkdir -p /tmp/netlify-config
-          cat > /tmp/netlify-config/netlify.toml << 'EOL'
+          # netlify.toml ファイルを作成
+          cat > build/WebGL/netlify.toml << 'EOL'
+          # 実際の公開ディレクトリを指定
           [build]
             publish = "WebGL"
           
@@ -108,12 +104,11 @@ jobs:
               Cross-Origin-Opener-Policy = "same-origin"
           EOL
           
-          # ビルドディレクトリに設定ファイルをコピー
-          sudo cp /tmp/netlify-config/netlify.toml build/WebGL/
+          # ビルド構造を確認して _redirects ファイルを作成（トラブルシューティング用）
+          echo "/* /index.html 200" > build/WebGL/WebGL/_redirects
           
-          # 設定ファイルの内容確認
-          echo "Netlify configuration file content:"
-          cat build/WebGL/netlify.toml || echo "Failed to read netlify.toml"
+          echo "Netlify.toml content:"
+          cat build/WebGL/netlify.toml
 
       # WebGL ビルドをアーティファクトとして保存
       - name: Upload WebGL build
@@ -131,9 +126,9 @@ jobs:
           production-branch: main
           github-token: ${{ secrets.GITHUB_TOKEN }}
           deploy-message: "Deploy from GitHub Actions"
-          enable-pull-request-comment: true
-          enable-commit-comment: true
-          overwrites-pull-request-comment: true
+          enable-pull-request-comment: false  # GitHub 権限エラーを避けるためにコメント無効化
+          enable-commit-comment: false  # GitHub 権限エラーを避けるためにコメント無効化
+          overwrites-pull-request-comment: false
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
