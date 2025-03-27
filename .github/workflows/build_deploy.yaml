@@ -53,21 +53,28 @@ jobs:
           buildsPath: build
           unityVersion: ${{ env.UNITY_VERSION }}
 
-      # ビルドディレクトリの内容確認
-      - name: Check build directory
+      # ビルドディレクトリの内容確認と権限修正
+      - name: Check build directory and fix permissions
         run: |
           ls -la build || echo "build directory does not exist"
           ls -la build/WebGL || echo "build/WebGL directory does not exist"
+          
+          # 権限を修正
+          sudo chown -R $(whoami):$(whoami) build || echo "Failed to change ownership"
+          sudo chmod -R 755 build || echo "Failed to change permissions"
+          
           if [ -d "build/WebGL/WebGL" ]; then
             echo "WebGL build is in build/WebGL/WebGL directory"
             ls -la build/WebGL/WebGL
             ls -la build/WebGL/WebGL/Build || echo "Build directory does not exist"
           fi
 
-      # Netlify 設定ファイル（Brotli 圧縮用）を作成
-      - name: Create Netlify configuration for Brotli compression
+      # 一時ディレクトリに Netlify 設定ファイルを作成し、コピー
+      - name: Create Netlify configuration in temp dir
         run: |
-          cat > build/WebGL/netlify.toml << 'EOL'
+          # 一時ディレクトリに設定ファイルを作成
+          mkdir -p /tmp/netlify-config
+          cat > /tmp/netlify-config/netlify.toml << 'EOL'
           [build]
             publish = "WebGL"
           
@@ -100,7 +107,13 @@ jobs:
               Cross-Origin-Embedder-Policy = "require-corp"
               Cross-Origin-Opener-Policy = "same-origin"
           EOL
-          cat build/WebGL/netlify.toml
+          
+          # ビルドディレクトリに設定ファイルをコピー
+          sudo cp /tmp/netlify-config/netlify.toml build/WebGL/
+          
+          # 設定ファイルの内容確認
+          echo "Netlify configuration file content:"
+          cat build/WebGL/netlify.toml || echo "Failed to read netlify.toml"
 
       # WebGL ビルドをアーティファクトとして保存
       - name: Upload WebGL build
