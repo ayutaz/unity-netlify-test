@@ -19,17 +19,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ディスク容量の確保
-      - name: Free disk space
-        run: |
-          sudo swapoff -a && sudo rm -f /swapfile
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc /usr/local/.ghcup
-          sudo apt-get remove -y google-cloud-cli || sudo apt-get remove -y google-cloud-sdk
-          sudo apt-get autoremove -y && sudo apt-get clean
-          docker system prune -af
-          df -h
-
       # Unity ライブラリのキャッシュ
       - name: Cache Unity Library
         uses: actions/cache@v4
@@ -51,22 +40,6 @@ jobs:
           buildName: WebGL
           buildsPath: build
           unityVersion: ${{ env.UNITY_VERSION }}
-
-      # ビルドディレクトリの確認
-      - name: Check build directory
-        run: |
-          echo "=== ビルドディレクトリ構造 ==="
-          find build -type d | sort
-          echo "=== WebGL ビルドファイル ==="
-          find build -name "*.br" -o -name "*.js" | sort
-
-      # WebGL ビルドをアーティファクトとして保存（デバッグ用）
-      - name: Upload WebGL build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: WebGL-Build
-          path: build/WebGL/WebGL
-          if-no-files-found: warn
 
       # deploy ブランチにビルド結果をデプロイ
       - name: Deploy to deploy branch
