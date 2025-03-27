@@ -1,11 +1,10 @@
-﻿name: Unity WebGL Build & Netlify Deploy
+﻿name: Unity WebGL Build & Deploy
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  # 手動実行用
   workflow_dispatch:
 
 env:
@@ -13,7 +12,7 @@ env:
 
 jobs:
   build-and-deploy:
-    name: Build WebGL and Deploy to Netlify
+    name: Build WebGL and Deploy
     runs-on: ubuntu-latest
     steps:
       # リポジトリのチェックアウト
@@ -53,27 +52,32 @@ jobs:
           buildsPath: build
           unityVersion: ${{ env.UNITY_VERSION }}
 
-      # ビルドディレクトリ構造を確認
-      - name: Check build directory structure
+      # ビルドディレクトリの確認
+      - name: Check build directory
         run: |
           echo "=== ビルドディレクトリ構造 ==="
           find build -type d | sort
           echo "=== WebGL ビルドファイル ==="
           find build -name "*.br" -o -name "*.js" | sort
-          
-          # 権限を変更
-          sudo chown -R $(whoami):$(whoami) build
-          sudo chmod -R 755 build
 
-      # ディレクトリ構造を修正（必要に応じて）
-      - name: Setup Netlify configuration
+      # WebGL ビルドをアーティファクトとして保存（デバッグ用）
+      - name: Upload WebGL build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebGL-Build
+          path: build/WebGL/WebGL
+          if-no-files-found: warn
+
+      # deploy ブランチにビルド結果をデプロイ
+      - name: Deploy to deploy branch
+        if: github.ref == 'refs/heads/main' # main ブランチの場合のみ実行
         run: |
-          # netlify.toml ファイルを作成
-          cat > build/WebGL/netlify.toml << 'EOL'
-          # 実際の公開ディレクトリを指定
-          [build]
-            publish = "WebGL"
+          # 一時ディレクトリにビルド結果をコピー
+          mkdir -p /tmp/webgl-build
+          cp -r build/WebGL/WebGL/* /tmp/webgl-build/
           
+          # netlify.toml ファイルを作成
+          cat > /tmp/webgl-build/netlify.toml << 'EOL'
           [[headers]]
             for = "/Build/*.data.br"
             [headers.values]
@@ -104,32 +108,24 @@ jobs:
               Cross-Origin-Opener-Policy = "same-origin"
           EOL
           
-          # ビルド構造を確認して _redirects ファイルを作成（トラブルシューティング用）
-          echo "/* /index.html 200" > build/WebGL/WebGL/_redirects
+          # SPAリダイレクト（オプション）
+          echo "/* /index.html 200" > /tmp/webgl-build/_redirects
           
-          echo "Netlify.toml content:"
-          cat build/WebGL/netlify.toml
-
-      # WebGL ビルドをアーティファクトとして保存
-      - name: Upload WebGL build
-        uses: actions/upload-artifact@v4
-        with:
-          name: WebGL-Build
-          path: build/WebGL
-          if-no-files-found: warn
-      
-      # Netlify にデプロイ
-      - name: Deploy to Netlify
-        uses: nwtgck/actions-netlify@v2
-        with:
-          publish-dir: './build/WebGL'
-          production-branch: main
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          deploy-message: "Deploy from GitHub Actions"
-          enable-pull-request-comment: false  # GitHub 権限エラーを避けるためにコメント無効化
-          enable-commit-comment: false  # GitHub 権限エラーを避けるためにコメント無効化
-          overwrites-pull-request-comment: false
-        env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
-        timeout-minutes: 10
+          # Git 設定
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          
+          # deploy ブランチをクローン
+          git clone --single-branch --branch deploy https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git /tmp/deploy-branch
+          
+          # deploy ブランチの内容をクリア
+          cd /tmp/deploy-branch
+          git rm -rf . || true
+          
+          # ビルドファイルをコピー
+          cp -r /tmp/webgl-build/* .
+          
+          # 変更をコミット
+          git add -A
+          git commit -m "Deploy WebGL build - $(date)" || echo "No changes to commit"
+          git push
