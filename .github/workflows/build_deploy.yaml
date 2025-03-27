@@ -53,29 +53,54 @@ jobs:
           buildsPath: build
           unityVersion: ${{ env.UNITY_VERSION }}
 
-      # ビルド結果のディレクトリを確認
+      # ビルドディレクトリの内容確認
       - name: Check build directory
         run: |
           ls -la build || echo "build directory does not exist"
           ls -la build/WebGL || echo "build/WebGL directory does not exist"
+          if [ -d "build/WebGL/WebGL" ]; then
+            echo "WebGL build is in build/WebGL/WebGL directory"
+            ls -la build/WebGL/WebGL
+            ls -la build/WebGL/WebGL/Build || echo "Build directory does not exist"
+          fi
 
-      # ビルド結果の権限を変更
-      - name: Fix permissions
+      # Netlify 設定ファイル（Brotli 圧縮用）を作成
+      - name: Create Netlify configuration for Brotli compression
         run: |
-          sudo chown -R $USER:$USER build || echo "Failed to change ownership of build directory"
-          sudo chmod -R 755 build || echo "Failed to change permissions of build directory"
-
-      # CORS 設定ファイルを追加
-      - name: Create Netlify configuration
-        run: |
-          mkdir -p build/WebGL || echo "Failed to create WebGL directory"
           cat > build/WebGL/netlify.toml << 'EOL'
+          [build]
+            publish = "WebGL"
+          
+          [[headers]]
+            for = "/Build/*.data.br"
+            [headers.values]
+              Content-Encoding = "br"
+              Content-Type = "application/octet-stream"
+
+          [[headers]]
+            for = "/Build/*.wasm.br"
+            [headers.values]
+              Content-Encoding = "br"
+              Content-Type = "application/wasm"
+
+          [[headers]]
+            for = "/Build/*.js"
+            [headers.values]
+              Content-Type = "application/javascript"
+
+          [[headers]]
+            for = "/Build/*.js.br"
+            [headers.values]
+              Content-Encoding = "br"
+              Content-Type = "application/javascript"
+          
           [[headers]]
             for = "/*"
-              [headers.values]
-                "Cross-Origin-Embedder-Policy" = "require-corp"
-                "Cross-Origin-Opener-Policy" = "same-origin"
+            [headers.values]
+              Cross-Origin-Embedder-Policy = "require-corp"
+              Cross-Origin-Opener-Policy = "same-origin"
           EOL
+          cat build/WebGL/netlify.toml
 
       # WebGL ビルドをアーティファクトとして保存
       - name: Upload WebGL build
@@ -85,8 +110,9 @@ jobs:
           path: build/WebGL
           if-no-files-found: warn
       
+      # Netlify にデプロイ
       - name: Deploy to Netlify
-        uses: nwtgck/actions-netlify@v3.0.0
+        uses: nwtgck/actions-netlify@v2
         with:
           publish-dir: './build/WebGL'
           production-branch: main
